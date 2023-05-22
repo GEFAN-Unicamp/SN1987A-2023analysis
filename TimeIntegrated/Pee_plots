@@ -1,0 +1,14 @@
+#This data have efficiency, background
+tau_vec=[1,1.1,1.2,1.3,1.4]
+x_Pee=[]
+L_Pee=[]
+
+#Load
+for tau in tau_vec:
+    x_Pee.append(np.load("Output/Pee_Energy_Ratio_alpha_2.3_tau_"+str(tau)+".npy"))
+    L_Pee.append(np.load("Output/Like_Pee_Energy_Ratio_alpha_2.3_tau_"+str(tau)+".npy"))
+    
+L_min=10**50
+for i in range(len(tau_vec)):
+    if L_min>np.amin(L_Pee[i]):
+        L_min=np.amin(L_Pee[i])

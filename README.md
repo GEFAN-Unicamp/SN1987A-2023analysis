@@ -1,1 +1,0 @@
-# SN1987A-2023analysis

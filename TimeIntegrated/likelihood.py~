@@ -1,0 +1,137 @@
+import numpy as np
+import scipy.integrate as integrate
+import math
+from scipy import interpolate
+from detection import *
+# from read_SN1987a import*
+
+#tempo_K,tempo_I,tempo_B, E_K,iE_K,theta_K,itheta_K,E_I,iE_I,theta_I,itheta_I,E_B,iE_B = read_SN_csv()
+from read_SN1987A_data import tempo_K,tempo_I,tempo_B, E_K,iE_K,theta_K,itheta_K,B_rate_K,E_I,iE_I,theta_I,itheta_I,E_B,iE_B,B_rate_B
+
+############### Likelihood ###############
+def Likelihood_Garching(x,mass_ord):
+    # E_0_e[MeV], L_e[10⁵² ergs], alpha_e, E_0_x[MeV], L_x[10⁵² ergs], alpha_x, Pee
+    E_0_e, L_e, alpha_e, E_0_x, L_x, alpha_x, Pee = x
+    #print(x)
+
+    if mass_ord == 'no tau':
+      # E_0_e[MeV], L_e[10⁵² ergs], alpha_e, tau = E_0_x/E_0_e, L_x[10⁵² ergs], alpha_x, Pee
+      E_0_e, L_e, alpha_e, tau, L_x, alpha_x, Pee = x
+      E_0_x = tau * E_0_e
+      mass_ord = 'no'
+
+    Emin =0.52 #MeV
+    Emax = 20*max(E_0_e,E_0_x)#MeV
+    #Emax = 100#MeV
+    E_vec=np.linspace(Emin,Emax,101)
+    cos_theta_vec = np.linspace(-1, 1, 11)
+    
+    #Total number of events  
+    ##### Kamiokande-II ##########
+    #N_tot_Kamiokande= integrate.simps(dN_Kamiokande_Garching_vec(E_vec[:,np.newaxis,np.newaxis], 1,E_0_e,L_e,E_0_x,L_x,alpha,Pee,mass_ord), E_vec, axis=0)[0]
+    integrand=dN_Kamiokande_Garching(E_vec[:,np.newaxis], cos_theta_vec[:,np.newaxis,np.newaxis],E_0_e,L_e,alpha_e,E_0_x,L_x,alpha_x, Pee, mass_ord,"total")
+    N_tot_Kamiokande= integrate.simps(integrate.simps(integrand, cos_theta_vec, axis=0), E_vec, axis=0)[0]
+    L_Kamiokande = 2*N_tot_Kamiokande
+  
+    for i in range(len(theta_K)):
+        cos_theta=math.cos(theta_K[i])
+        dN=dN_Kamiokande_exp_Garching(E_K[i],iE_K[i],cos_theta,E_0_e,L_e,alpha_e,E_0_x,L_x,alpha_x,Pee,mass_ord)[0]
+        if dN<=10**(-320):
+            dN=10**(-320)
+        L_Kamiokande = L_Kamiokande-2*np.log(dN+B_rate_K[i]/2*tempo_K[-1])
+        #L_Kamiokande = L_Kamiokande-2*np.log(dN)
+      
+    ##### IMB ##########
+    #N_tot_IMB= integrate.simps(dN_IMB_Garching_vec(E_vec[:,np.newaxis,np.newaxis], 1,E_0_e,L_e,E_0_x,L_x,alpha,Pee,mass_ord), E_vec, axis=0)[0]
+    integrand=dN_IMB_Garching(E_vec[:,np.newaxis], cos_theta_vec[:,np.newaxis,np.newaxis],E_0_e,L_e,alpha_e,E_0_x,L_x,alpha_x, Pee, mass_ord,"total")
+    N_tot_IMB= integrate.simps(integrate.simps(integrand, cos_theta_vec, axis=0), E_vec, axis=0)[0]
+    L_IMB = 2*N_tot_IMB
+  
+    for i in range(len(theta_I)):
+        cos_theta=math.cos(theta_I[i])
+        dN=dN_IMB_exp_Garching(E_I[i],iE_I[i],cos_theta,E_0_e,L_e,alpha_e,E_0_x,L_x,alpha_x,Pee,mass_ord)[0]
+        if dN<=10**(-320):
+            dN=10**(-320)
+        L_IMB = L_IMB-2*np.log(dN)
+
+  
+    ##### Baksan ##########
+    #N_tot_Baksan=integrate.simps(dN_Baksan_Garching_vec(E_vec[:,np.newaxis,np.newaxis], 1,E_0_e,L_e,E_0_x,L_x,alpha,Pee,mass_ord), E_vec, axis=0)[0]
+    integrand=dN_Baksan_Garching(E_vec[:,np.newaxis], cos_theta_vec[:,np.newaxis,np.newaxis],E_0_e,L_e,alpha_e,E_0_x,L_x,alpha_x, Pee, mass_ord,"total")
+    N_tot_Baksan=integrate.simps(integrate.simps(integrand, cos_theta_vec, axis=0), E_vec, axis=0)[0]
+    L_Baksan = 2*N_tot_Baksan
+  
+    for i in range(len(tempo_B)):
+        cos_theta=0
+        dN=dN_Baksan_exp_Garching(E_B[i],iE_B[i],cos_theta,E_0_e,L_e,alpha_e,E_0_x,L_x,alpha_x,Pee,mass_ord)[0]
+        if dN<=10**(-320):
+            dN=10**(-320)
+        L_Baksan = L_Baksan-2*np.log(dN+B_rate_B[i]/2*tempo_B[-1])
+        #L_Baksan = L_Baksan-2*np.log(dN)
+    return L_Kamiokande+L_IMB+L_Baksan
+Likelihood_Garching_vec=np.vectorize(Likelihood_Garching)
+
+def Likelihood_Garching_NH(x):
+    x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],0]
+    return Likelihood_Garching(x_aux,"NH")
+
+def Likelihood_Garching_IH(x):
+    x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],0]
+    return Likelihood_Garching(x_aux,"IH")
+  
+def Likelihood_Garching_Pee(x):
+    x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],x[6]]
+    return Likelihood_Garching(x_aux,"no")
+
+def Likelihood_Garching_NH_Energy_Hierarchy(x):
+#     if x[0]>x[3]:
+#         return 10**50
+    x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],0]
+    return Likelihood_Garching(x_aux,"NH")*(1+(10**3)*(1/(1 + np.exp((x[3]-x[0])*10))))
+
+def Likelihood_Garching_IH_Energy_Hierarchy(x):
+#     if x[0]>x[3]:
+#         return 10**50
+    x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],0]
+    return Likelihood_Garching(x_aux,"IH")*(1+(10**3)*(1/(1 + np.exp((x[3]-x[0])*10))))
+  
+def Likelihood_Garching_Pee_Energy_Hierarchy(x):
+#     if x[0]>x[3]:
+#         return 10**50
+    x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],x[6]]
+    return Likelihood_Garching(x_aux,"no")*(1+(10**3)*(1/(1 + np.exp((x[3]-x[0])*10))))
+
+
+def Likelihood_Garching_Pee_Energy_Ratio(x):
+  # E_0_e[MeV], L_e[10⁵² ergs], alpha_e, E_0_x[MeV], L_x[10⁵² ergs], alpha_x, Pee
+    x_aux=[x[0],x[1],x[2],x[3]*x[0],x[4],x[5],x[6]]
+    return Likelihood_Garching(x_aux,"no")
+
+# def Likelihood_Garching_NH_Energy_Hierarchy_acc(x):
+#     if x[0]>x[3]:
+#         return 10**50
+#     x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],0]
+#     return Likelihood_Garching(x_aux,"NH",x[6],x[7],x[8],"yes")
+
+# def Likelihood_Garching_IH_Energy_Hierarchy_acc(x):
+#     if x[0]>x[3]:
+#         return 10**50
+#     x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],0]
+#     return Likelihood_Garching(x_aux,"IH",x[6],x[7],x[8],"yes")
+  
+# def Likelihood_Garching_Pee_Energy_Hierarchy_acc(x):
+#     if x[0]>x[3]:
+#         return 10**50
+#     x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],x[9]]
+#     return Likelihood_Garching(x_aux,"no",x[6],x[7],x[8],"yes")
+
+
+def Likelihood_Garching_Pee_Energy_Ratio(x):
+  # E_0_e[MeV], L_e[10⁵² ergs], alpha_e, E_0_x[MeV], L_x[10⁵² ergs], alpha_x, Pee
+    x_aux=[x[0],x[1],x[2],x[3]*x[0],x[4],x[5],x[6]]
+    return Likelihood_Garching(x_aux,"no")
+
+def Likelihood_Garching_Pee_tau(x):
+  # E_0_e[MeV], L_e[10⁵² ergs], alpha_e, tau = E_0_x/E_0_e, L_x[10⁵² ergs], alpha_x, Pee
+    x_aux=[x[0],x[1],x[2],x[3],x[4],x[5],x[6]]
+    return Likelihood_Garching(x_aux,"no tau")
